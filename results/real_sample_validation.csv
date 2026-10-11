@@ -1,0 +1,6 @@
+﻿sample,can_messages,windows,abnormal_windows,injected_t,prediction
+Normal,30000,150,0,0.00%,NORMAL
+DoS,26476,132,70,27.21%,DOS
+Fuzzy,26567,132,42,11.65%,FUZZY
+Gear spoofing,27140,135,71,16.38%,GEAR
+RPM spoofing,26708,133,75,17.52%,RPM
