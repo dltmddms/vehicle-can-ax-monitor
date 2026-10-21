@@ -111,6 +111,32 @@ CAN ID의 실제 물리 신호 의미는 DBC 또는 OEM 사양 없이 단정하�
 
 ---
 
+## Automated Tests
+
+실제 HCRL 데이터와 학습 모델이 없어도 핵심 분석 로직을 확인할 수 있도록 합성 CAN 로그와 모의 모델 기반 테스트를 포함한다.
+
+검증 항목:
+
+- Window feature 계산
+- 특정 CAN ID 반복 패턴
+- 메시지 수 부족 시 예외 처리
+- Window 경계 및 마지막 불완전 Window 처리
+- 정상 / DoS 유사 구간 분류
+- 비정상 구간 요약 및 고빈도 CAN ID 집계
+- Normal / DoS Incident Report 생성
+
+로컬 실행:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+GitHub Actions는 `main` 브랜치 push와 pull request마다 같은 테스트를 자동 실행한다.
+
+> 이 테스트는 **코드 로직과 분석 파이프라인의 재현성 확인용**이다. 위의 HCRL 내부 평가 성능(Macro F1 0.9965, Attack Recall 0.995)을 다시 측정하는 모델 성능 테스트가 아니다.
+
+---
+
 ## Run
 
 ### 1. Setup
