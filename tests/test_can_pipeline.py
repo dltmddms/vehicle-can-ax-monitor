@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 
 from src.data_loader import hex_to_numeric
+from src.demo import DEMO_SAMPLES, demo_bundle, make_demo_log
 from src.features import FEATURE_COLUMNS, make_windows, window_features
 from src.inference import analyze_frames, incident_summary
 from src.report import template_report
@@ -206,6 +207,84 @@ class ReportTests(unittest.TestCase):
         self.assertIn("0x0000 (4)", report)
         self.assertIn("### Recommended checks", report)
         self.assertIn("메시지 발생 주기와 전송률", report)
+
+
+class SyntheticDemoTests(unittest.TestCase):
+    def test_demo_samples_are_available_without_external_files(self):
+        self.assertEqual(
+            set(DEMO_SAMPLES.values()),
+            {"normal", "dos", "fuzzy"},
+        )
+
+        for sample in DEMO_SAMPLES.values():
+            raw = make_demo_log(sample, window_size=100, total_windows=6)
+            self.assertEqual(len(raw), 600)
+            self.assertTrue(
+                {"timestamp", "can_id", "dlc", "d0", "d7", "flag"}.issubset(raw.columns)
+            )
+
+    def test_normal_demo_stays_normal(self):
+        raw = make_demo_log("normal", window_size=100, total_windows=6)
+        windows = analyze_frames(
+            raw,
+            demo_bundle(),
+            window_size=100,
+            stride=100,
+        )
+        summary = incident_summary(raw, windows)
+
+        self.assertEqual(len(windows), 6)
+        self.assertTrue((windows["prediction"] == "normal").all())
+        self.assertEqual(summary["status"], "NORMAL")
+        self.assertEqual(summary["abnormal_windows"], 0)
+
+    def test_dos_demo_marks_middle_windows_abnormal(self):
+        raw = make_demo_log("dos", window_size=100, total_windows=6)
+        windows = analyze_frames(
+            raw,
+            demo_bundle(),
+            window_size=100,
+            stride=100,
+        )
+        summary = incident_summary(raw, windows)
+
+        self.assertEqual(windows["prediction"].tolist(), [
+            "normal", "normal", "dos", "dos", "normal", "normal"
+        ])
+        self.assertEqual(summary["predicted_attack"], "dos")
+        self.assertEqual(summary["abnormal_windows"], 2)
+        self.assertEqual(summary["suspicious_ids"][0]["can_id"], "0000")
+
+    def test_fuzzy_demo_marks_middle_windows_abnormal(self):
+        raw = make_demo_log("fuzzy", window_size=100, total_windows=6)
+        windows = analyze_frames(
+            raw,
+            demo_bundle(),
+            window_size=100,
+            stride=100,
+        )
+        summary = incident_summary(raw, windows)
+
+        self.assertEqual(windows["prediction"].tolist(), [
+            "normal", "normal", "fuzzy", "fuzzy", "normal", "normal"
+        ])
+        self.assertEqual(summary["predicted_attack"], "fuzzy")
+        self.assertEqual(summary["abnormal_windows"], 2)
+
+    def test_demo_report_is_explicitly_synthetic(self):
+        raw = make_demo_log("dos", window_size=100, total_windows=6)
+        windows = analyze_frames(
+            raw,
+            demo_bundle(),
+            window_size=100,
+            stride=100,
+        )
+        summary = incident_summary(raw, windows)
+
+        report = template_report(summary, model_mode="synthetic_demo")
+
+        self.assertIn("합성 로그", report)
+        self.assertIn("DoS 유사 패턴", report)
 
 
 if __name__ == "__main__":
