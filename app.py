@@ -156,6 +156,12 @@ PATTERN_NOTE = {
     "rpm": "RPM spoofing 학습 패턴과 유사한 구간이 확인됐다. 실제 신호 의미는 차량 사양과 함께 확인해야 한다.",
 }
 
+DEMO_PATTERN_NOTE = {
+    "normal": "합성 정상 로그에서 모의 탐지 규칙에 해당하는 이상 패턴이 확인되지 않았다.",
+    "dos": "동일 CAN ID가 높은 비율로 반복되는 합성 DoS 유사 구간이다.",
+    "fuzzy": "CAN ID 분포가 넓게 퍼지도록 만든 합성 Fuzzy 유사 구간이다.",
+}
+
 VALIDATION_ROWS = [
     {"Sample": "Normal", "Messages": 30000, "Windows": 150, "Abnormal": 0, "Injected": "0.00%", "Prediction": "NORMAL"},
     {"Sample": "DoS", "Messages": 26476, "Windows": 132, "Abnormal": 70, "Injected": "27.21%", "Prediction": "DOS"},
@@ -371,7 +377,7 @@ with monitor_tab:
             render_timeline(windows)
             st.markdown(
                 f'<div class="interpretation">'
-                f'{PATTERN_NOTE.get(summary["predicted_attack"].lower(), "분석 결과를 확인한다.")}'
+                f'{(DEMO_PATTERN_NOTE if is_demo else PATTERN_NOTE).get(summary["predicted_attack"].lower(), "분석 결과를 확인한다.")}'
                 f'</div>',
                 unsafe_allow_html=True,
             )
