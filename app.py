@@ -8,6 +8,7 @@ from src.data_loader import read_hcrl_csv
 from src.modeling import load_bundle
 from src.inference import analyze_frames, incident_summary
 from src.report import template_report, ollama_report
+from src.demo import DEMO_SAMPLES, demo_bundle, make_demo_log
 
 ROOT = Path(__file__).parent
 MODEL = ROOT / "models/can_ax_model.joblib"
@@ -209,25 +210,40 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-if not MODEL.exists():
-    st.error("학습된 모델을 찾을 수 없다. TRAIN_REAL_DATA.bat 실행 후 다시 시작해 주세요.")
-    st.stop()
-
-bundle = load_bundle(MODEL)
-mode = bundle.get("dataset_mode", "unknown")
+real_bundle = None
+model_load_error = None
+if MODEL.exists():
+    try:
+        real_bundle = load_bundle(MODEL)
+    except Exception as exc:
+        model_load_error = str(exc)
 
 with st.sidebar:
     st.markdown("### Analysis")
-    source = st.radio(
-        "Input",
-        ["Real HCRL sample", "Upload CSV"],
+    analysis_mode = st.radio(
+        "Mode",
+        ["Synthetic demo", "HCRL model"],
         index=0,
-        label_visibility="collapsed",
+        help="Synthetic demo는 외부 데이터나 학습 모델 없이 화면 흐름을 체험하는 모드다.",
     )
 
+    selected_demo = None
+    source = None
     selected_name = None
-    if source == "Real HCRL sample":
-        selected_name = st.selectbox("Sample", list(SAMPLE_MAP.keys()))
+
+    if analysis_mode == "Synthetic demo":
+        selected_demo = st.selectbox("Demo sample", list(DEMO_SAMPLES.keys()))
+        st.caption("합성 CAN 로그 · 규칙 기반 모의 분석")
+    else:
+        if real_bundle is None:
+            st.warning("학습 모델이 없어 HCRL model 모드는 현재 사용할 수 없다.")
+        source = st.radio(
+            "Input",
+            ["Real HCRL sample", "Upload CSV"],
+            index=0,
+        )
+        if source == "Real HCRL sample":
+            selected_name = st.selectbox("Sample", list(SAMPLE_MAP.keys()))
 
     window_size = st.select_slider(
         "Window size",
@@ -240,7 +256,8 @@ with st.sidebar:
         use_ollama = st.checkbox(
             "Use local language model",
             value=False,
-            help="선택 시 로컬 Ollama가 구조화된 분석 결과를 문장으로 정리한다.",
+            disabled=analysis_mode == "Synthetic demo",
+            help="HCRL model 모드에서만 선택적으로 사용한다.",
         )
 
     st.caption("Default · 200 messages")
@@ -249,24 +266,48 @@ monitor_tab, validation_tab, method_tab = st.tabs(["Monitor", "Validation", "Met
 
 with monitor_tab:
     try:
-        if source == "Real HCRL sample":
-            selected = SAMPLE_MAP[selected_name]
-            if not selected.exists():
-                st.info("실제 샘플이 없다. MAKE_REAL_TEST_FILES.bat을 먼저 실행해 주세요.")
-                st.stop()
-            raw = read_hcrl_csv(selected)
-            filename = selected.name
-        else:
-            uploaded = st.file_uploader(
-                "CAN log file",
-                type=["csv", "txt"],
-                label_visibility="collapsed",
+        is_demo = analysis_mode == "Synthetic demo"
+
+        if is_demo:
+            sample_key = DEMO_SAMPLES[selected_demo]
+            raw = make_demo_log(sample_key, window_size=window_size)
+            bundle = demo_bundle()
+            mode = "synthetic_demo"
+            filename = f"synthetic_{sample_key}.csv"
+            st.info(
+                "Synthetic Demo · 합성 CAN 로그와 규칙 기반 모의 탐지 결과. "
+                "HCRL 학습 모델의 예측 또는 성능 평가 결과가 아니다."
             )
-            if uploaded is None:
-                st.info("CSV 또는 TXT 형식의 CAN 로그를 업로드하면 분석을 시작한다.")
+        else:
+            if real_bundle is None:
+                st.warning(
+                    "HCRL 학습 모델을 찾을 수 없다. 실제 분석 모드는 TRAIN_REAL_DATA.bat 실행 후 사용할 수 있다."
+                )
+                if model_load_error:
+                    st.caption(f"Model load error: {model_load_error}")
                 st.stop()
-            raw = read_hcrl_csv(uploaded)
-            filename = uploaded.name
+
+            bundle = real_bundle
+            mode = bundle.get("dataset_mode", "unknown")
+
+            if source == "Real HCRL sample":
+                selected = SAMPLE_MAP[selected_name]
+                if not selected.exists():
+                    st.info("실제 샘플이 없다. MAKE_REAL_TEST_FILES.bat을 먼저 실행해 주세요.")
+                    st.stop()
+                raw = read_hcrl_csv(selected)
+                filename = selected.name
+            else:
+                uploaded = st.file_uploader(
+                    "CAN log file",
+                    type=["csv", "txt"],
+                    label_visibility="collapsed",
+                )
+                if uploaded is None:
+                    st.info("CSV 또는 TXT 형식의 CAN 로그를 업로드하면 분석을 시작한다.")
+                    st.stop()
+                raw = read_hcrl_csv(uploaded)
+                filename = uploaded.name
 
         windows = analyze_frames(
             raw,
@@ -287,7 +328,7 @@ with monitor_tab:
         chips = [
             html.escape(filename),
             f"Window {window_size}",
-            "HCRL-trained model",
+            "Synthetic demo · mock detector" if is_demo else "HCRL-trained model",
         ]
 
         st.markdown(
@@ -301,8 +342,25 @@ with monitor_tab:
         c1.metric("Messages", f"{len(raw):,}")
         c2.metric("Windows", f"{total_windows:,}")
         c3.metric("Detected pattern", summary["predicted_attack"].upper())
-        c4.metric("Mean confidence", f"{mean_conf * 100:.1f}%")
+        c4.metric(
+            "Mock confidence" if is_demo else "Mean confidence",
+            f"{mean_conf * 100:.1f}%",
+        )
         c5.metric("Abnormal windows", f"{abnormal_count:,} / {total_windows:,}")
+
+        st.subheader("CAN message sample")
+        message_cols = [
+            c for c in ["timestamp", "can_id", "dlc", "d0", "d1", "d2", "d3", "flag"]
+            if c in raw.columns
+        ]
+        st.dataframe(
+            raw[message_cols].head(16),
+            hide_index=True,
+            use_container_width=True,
+            height=220,
+        )
+        if is_demo:
+            st.caption("flag는 합성 데이터 생성 시 넣은 구간 표시이며 모의 탐지기의 입력으로 사용하지 않는다.")
 
         st.divider()
 
@@ -363,19 +421,25 @@ with monitor_tab:
 
         st.divider()
 
-        report_title = "Analysis report" if abnormal_count == 0 else "Incident report"
+        if is_demo:
+            report_title = "Demo report"
+        else:
+            report_title = "Analysis report" if abnormal_count == 0 else "Incident report"
         st.subheader(report_title)
 
-        report = ollama_report(summary, mode) if use_ollama else None
+        report = ollama_report(summary, mode) if (use_ollama and not is_demo) else None
         if report is None:
             report = template_report(summary, mode)
 
         st.markdown(report)
 
+        report_note = (
+            '합성 데이터와 규칙 기반 모의 분석 결과이며 실제 HCRL 모델 성능과 무관하다.'
+            if is_demo
+            else '초기 로그 분석을 위한 참고 결과이며, 실제 조치 전 원본 로그와 차량 사양을 함께 확인한다.'
+        )
         st.markdown(
-            '<div class="section-note">'
-            '초기 로그 분석을 위한 참고 결과이며, 실제 조치 전 원본 로그와 차량 사양을 함께 확인한다.'
-            '</div>',
+            f'<div class="section-note">{report_note}</div>',
             unsafe_allow_html=True,
         )
 
@@ -401,6 +465,9 @@ with monitor_tab:
         st.exception(exc)
 
 with validation_tab:
+    st.info(
+        "이 탭의 수치는 HCRL 학습 모델 검증 결과다. Synthetic Demo의 모의 탐지 결과와 별도로 본다."
+    )
     st.subheader("Real-sample validation")
     st.caption(
         "HCRL 원본에서 추출한 연속 구간으로 다섯 가지 샘플을 확인했다. "
@@ -479,6 +546,12 @@ Analysis Summary
    ↓
 Report""",
         language="text",
+    )
+
+    st.markdown("#### Analysis modes")
+    st.write(
+        "**Synthetic demo**: 합성 로그와 규칙 기반 모의 탐지기로 UI와 분석 흐름을 체험한다. "
+        "**HCRL model**: 학습된 Random Forest 모델과 실제/업로드 로그를 사용한다."
     )
 
     m1, m2 = st.columns(2, gap="large")
