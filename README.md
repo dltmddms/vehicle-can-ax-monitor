@@ -111,6 +111,36 @@ CAN ID의 실제 물리 신호 의미는 DBC 또는 OEM 사양 없이 단정하�
 
 ---
 
+## Quick Demo — HCRL data/model not required
+
+저장소에 학습 모델이나 HCRL 원본 데이터가 없어도 Streamlit 화면과 분석 흐름을 확인할 수 있다.
+
+### 1. Setup
+
+```bat
+RUN_FIRST.bat
+```
+
+### 2. Run
+
+```bat
+RUN_APP.bat
+```
+
+브라우저에서 `http://localhost:8501`을 열면 **Synthetic demo**가 기본 모드로 선택된다.
+
+데모 샘플:
+
+- `Normal example`
+- `DoS-like example`
+- `Fuzzy-like example`
+
+데모에서는 합성 CAN 메시지, Window별 탐지 결과, 이상 구간, 고빈도 CAN ID, Demo report를 확인할 수 있다.
+
+> **Synthetic Demo는 합성 로그와 규칙 기반 모의 탐지기를 사용한다. 실제 HCRL 학습 모델의 예측 결과나 성능 평가가 아니다.** HCRL 성능 수치는 아래 Real-data Validation과 별도로 구분한다.
+
+---
+
 ## Automated Tests
 
 실제 HCRL 데이터와 학습 모델이 없어도 핵심 분석 로직을 확인할 수 있도록 합성 CAN 로그와 모의 모델 기반 테스트를 포함한다.
@@ -137,7 +167,9 @@ GitHub Actions는 `main` 브랜치 push와 pull request마다 같은 테스트�
 
 ---
 
-## Run
+## HCRL Model Mode
+
+실제 HCRL 분석 모드는 저장소에 포함되지 않은 원본 데이터와 학습 모델이 필요하다. 아래 순서로 모델을 생성한 뒤 Sidebar에서 `HCRL model`을 선택한다.
 
 ### 1. Setup
 
