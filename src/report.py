@@ -33,13 +33,20 @@ def build_report_context(summary: dict, model_mode: str) -> dict:
         ],
     }
 
-    descriptions = {
-        "normal": "현재 분석 구간에서는 학습된 공격 패턴이 확인되지 않았다.",
-        "dos": "특정 CAN ID의 반복 빈도와 메시지 분포가 정상 구간과 다르게 나타났다.",
-        "fuzzy": "CAN ID 및 payload 분포가 정상 구간보다 넓게 퍼지는 패턴이 나타났다.",
-        "gear": "Gear spoofing 학습 패턴과 유사한 구간이 확인됐다.",
-        "rpm": "RPM spoofing 학습 패턴과 유사한 구간이 확인됐다.",
-    }
+    if model_mode == "synthetic_demo":
+        descriptions = {
+            "normal": "합성 정상 로그에서 모의 탐지 규칙에 해당하는 이상 패턴이 확인되지 않았다.",
+            "dos": "합성 로그에서 동일 CAN ID가 높은 비율로 반복되는 DoS 유사 패턴이 확인됐다.",
+            "fuzzy": "합성 로그에서 CAN ID 분포가 넓게 퍼지는 Fuzzy 유사 패턴이 확인됐다.",
+        }
+    else:
+        descriptions = {
+            "normal": "현재 분석 구간에서는 학습된 공격 패턴이 확인되지 않았다.",
+            "dos": "특정 CAN ID의 반복 빈도와 메시지 분포가 정상 구간과 다르게 나타났다.",
+            "fuzzy": "CAN ID 및 payload 분포가 정상 구간보다 넓게 퍼지는 패턴이 나타났다.",
+            "gear": "Gear spoofing 학습 패턴과 유사한 구간이 확인됐다.",
+            "rpm": "RPM spoofing 학습 패턴과 유사한 구간이 확인됐다.",
+        }
 
     return {
         **summary,
